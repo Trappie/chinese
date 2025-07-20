@@ -83,29 +83,22 @@ def generate_pdf(characters):
         pdfmetrics.registerFont(UnicodeCIDFont('STSong-Light'))
         font_name = "STSong-Light"
         print("Using built-in STSong-Light CID font")
-    except:
+    except Exception as e:
+        print(f"Failed to load STSong-Light: {e}")
         try:
             pdfmetrics.registerFont(UnicodeCIDFont('MSung-Light'))
             font_name = "MSung-Light"
             print("Using built-in MSung-Light CID font")
-        except:
-            # Try system TTF fonts as fallback
-            font_paths = [
-                '/System/Library/Fonts/PingFang.ttc',
-                '/System/Library/Fonts/Hiragino Sans GB.ttc',
-                '/Library/Fonts/Arial Unicode MS.ttf'
-            ]
-            
-            for font_path in font_paths:
-                try:
-                    if os.path.exists(font_path):
-                        pdfmetrics.registerFont(TTFont('Chinese', font_path))
-                        font_name = "Chinese"
-                        print(f"Using TTF font: {font_path}")
-                        break
-                except Exception as e:
-                    print(f"Failed to load {font_path}: {e}")
-                    continue
+        except Exception as e:
+            print(f"Failed to load MSung-Light: {e}")
+            # For PythonAnywhere - use fallback method
+            try:
+                # Try to use DejaVu Sans which supports some Unicode
+                font_name = "Helvetica"
+                print("Using Helvetica fallback - Chinese characters may display as boxes")
+            except Exception as e:
+                print(f"Final fallback failed: {e}")
+                font_name = "Helvetica"
     
     if font_name == "Helvetica":
         print("Warning: Using Helvetica fallback - Chinese characters may not display")
@@ -144,16 +137,37 @@ def generate_pdf(characters):
         
         # Draw character centered in cell
         try:
-            text_width = c.stringWidth(char, font_name, font_size)
-            x_centered = x + (cell_width - text_width) / 2
-            y_centered = y + cell_height/2 - font_size/3
-            c.drawString(x_centered, y_centered, char)
+            # For Chinese characters with Helvetica fallback, try to encode properly
+            if font_name == "Helvetica":
+                # Try to draw the character, fallback to placeholder if it fails
+                try:
+                    # Test if character can be encoded
+                    char.encode('latin-1')
+                    text_width = c.stringWidth(char, font_name, font_size)
+                    x_centered = x + (cell_width - text_width) / 2
+                    y_centered = y + cell_height/2 - font_size/3
+                    c.drawString(x_centered, y_centered, char)
+                except UnicodeEncodeError:
+                    # Character can't be encoded in latin-1, draw placeholder
+                    x_centered = x + cell_width/2 - 5
+                    y_centered = y + cell_height/2 - 5
+                    c.setFont("Helvetica", 16)
+                    c.drawString(x_centered, y_centered, "□")
+                    c.setFont(font_name, font_size)  # Reset font
+            else:
+                # Using CID font, should work fine
+                text_width = c.stringWidth(char, font_name, font_size)
+                x_centered = x + (cell_width - text_width) / 2
+                y_centered = y + cell_height/2 - font_size/3
+                c.drawString(x_centered, y_centered, char)
         except Exception as e:
             print(f"Error drawing character '{char}': {e}")
             # Draw a placeholder
             x_centered = x + cell_width/2 - 5
             y_centered = y + cell_height/2 - 5
-            c.drawString(x_centered, y_centered, "?")
+            c.setFont("Helvetica", 16)
+            c.drawString(x_centered, y_centered, "□")
+            c.setFont(font_name, font_size)  # Reset font
     
     c.save()
     return temp_file.name
