@@ -11,7 +11,11 @@ import random
 app = Flask(__name__)
 
 def load_characters():
-    with open('data.txt', 'r', encoding='utf-8') as f:
+    # Use absolute path for PythonAnywhere deployment
+    import os
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    data_path = os.path.join(current_dir, 'data.txt')
+    with open(data_path, 'r', encoding='utf-8') as f:
         return f.read().strip()
 
 def select_characters(new_chars, start_char, all_chars):
