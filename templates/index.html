@@ -129,6 +129,50 @@
             border-bottom: 1px solid #eee;
             padding-bottom: 10px;
         }
+        .tabs {
+            display: flex;
+            margin-bottom: 20px;
+            border-bottom: 2px solid #ddd;
+        }
+        .tab {
+            padding: 12px 24px;
+            cursor: pointer;
+            border: none;
+            background: none;
+            font-size: 16px;
+            color: #666;
+            border-bottom: 3px solid transparent;
+        }
+        .tab.active {
+            color: #4CAF50;
+            border-bottom-color: #4CAF50;
+            font-weight: bold;
+        }
+        .tab:hover {
+            color: #4CAF50;
+            background-color: #f5f5f5;
+        }
+        .tab-content {
+            display: none;
+        }
+        .tab-content.active {
+            display: block;
+        }
+        .custom-textarea {
+            width: 100%;
+            min-height: 120px;
+            padding: 10px;
+            border: 2px solid #ddd;
+            border-radius: 5px;
+            font-size: 16px;
+            font-family: "SimSun", "Microsoft YaHei", "Helvetica", sans-serif;
+            box-sizing: border-box;
+            resize: vertical;
+        }
+        .custom-textarea:focus {
+            outline: none;
+            border-color: #4CAF50;
+        }
     </style>
 </head>
 <body>
@@ -141,6 +185,14 @@
         </div>
         {% endif %}
         
+        <!-- Tab Navigation -->
+        <div class="tabs">
+            <button class="tab active" onclick="switchTab('smart-tab')">Smart Selection</button>
+            <button class="tab" onclick="switchTab('custom-tab')">Custom Characters</button>
+        </div>
+
+        <!-- Smart Selection Tab -->
+        <div id="smart-tab" class="tab-content active">
         <form action="/generate" method="post">
             <div class="form-group">
                 <label for="new_chars">New Characters to Learn:</label>
@@ -175,6 +227,40 @@
                 <li>If you enter 7 new characters, 43 old characters will be selected for review</li>
             </ul>
         </div>
+        </div>
+
+        <!-- Custom Characters Tab -->
+        <div id="custom-tab" class="tab-content">
+        <form action="/generate-custom" method="post">
+            <div class="form-group">
+                <label for="custom_chars">Paste Your Characters:</label>
+                <textarea id="custom_chars" name="custom_chars" class="custom-textarea" placeholder="Paste any Chinese characters here. Non-Chinese characters will be filtered out automatically, and duplicates will be removed." required>{{ custom_chars or '' }}</textarea>
+                <div class="help-text">Paste any text containing Chinese characters. The system will automatically filter and deduplicate them.</div>
+                <button type="button" class="view-chars-btn" onclick="showCharacters()">📖 View All Available Characters</button>
+            </div>
+            
+            <div class="form-group">
+                <label>
+                    <input type="checkbox" id="custom_shuffle" name="shuffle" style="margin-right: 10px;" {{ custom_shuffle_checked or 'checked' }}>
+                    Shuffle characters in PDF
+                </label>
+                <div class="help-text">Check this box to randomly shuffle the order of characters in the generated PDF</div>
+            </div>
+            
+            <button type="submit" class="submit-btn">Generate Custom PDF</button>
+        </form>
+        
+        <div style="margin-top: 30px; padding: 15px; background-color: #fff3e0; border-radius: 5px;">
+            <h3 style="margin-top: 0; color: #f57c00;">Custom Characters Mode:</h3>
+            <ul style="color: #555;">
+                <li>Paste any text containing Chinese characters</li>
+                <li>Non-Chinese characters are automatically filtered out</li>
+                <li>Duplicate characters are automatically removed</li>
+                <li>Multiple pages generated if you have more than 50 characters</li>
+                <li>Each page contains up to 50 characters in a 5x10 grid</li>
+            </ul>
+        </div>
+        </div>
     </div>
 
     <!-- Character Display Modal -->
@@ -190,6 +276,22 @@
     </div>
 
     <script>
+        function switchTab(tabId) {
+            // Hide all tab contents
+            const tabContents = document.querySelectorAll('.tab-content');
+            tabContents.forEach(content => content.classList.remove('active'));
+            
+            // Remove active class from all tabs
+            const tabs = document.querySelectorAll('.tab');
+            tabs.forEach(tab => tab.classList.remove('active'));
+            
+            // Show selected tab content
+            document.getElementById(tabId).classList.add('active');
+            
+            // Add active class to clicked tab
+            event.target.classList.add('active');
+        }
+
         function showCharacters() {
             document.getElementById('characterModal').style.display = 'block';
             

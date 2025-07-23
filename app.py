@@ -7,6 +7,7 @@ from reportlab.pdfbase.cidfonts import UnicodeCIDFont
 import tempfile
 import os
 import random
+import re
 
 app = Flask(__name__)
 
@@ -74,6 +75,30 @@ def select_characters(new_chars, start_char, all_chars):
     
     return new_char_list + old_chars[:num_old]
 
+def filter_chinese_characters(text):
+    """
+    Filter out only Chinese characters from text and remove duplicates
+    Returns a string of unique Chinese characters
+    """
+    # Chinese character Unicode ranges:
+    # \u4e00-\u9fff: CJK Unified Ideographs (most common Chinese characters)
+    # \u3400-\u4dbf: CJK Extension A
+    # \uf900-\ufaff: CJK Compatibility Ideographs
+    chinese_pattern = r'[\u4e00-\u9fff\u3400-\u4dbf\uf900-\ufaff]'
+    
+    # Find all Chinese characters
+    chinese_chars = re.findall(chinese_pattern, text)
+    
+    # Remove duplicates while preserving order
+    unique_chars = []
+    seen = set()
+    for char in chinese_chars:
+        if char not in seen:
+            unique_chars.append(char)
+            seen.add(char)
+    
+    return ''.join(unique_chars)
+
 def generate_pdf(characters):
     temp_file = tempfile.NamedTemporaryFile(delete=False, suffix='.pdf')
     c = canvas.Canvas(temp_file.name, pagesize=letter)
@@ -123,18 +148,21 @@ def generate_pdf(characters):
     x_start = margin
     y_start = height - margin - cell_height
     
-    for i, char in enumerate(characters[:50]):
-        row = i // chars_per_row
-        col = i % chars_per_row
+    chars_per_page = chars_per_row * rows_per_page  # 50 characters per page
+    
+    for i, char in enumerate(characters):
+        page_num = i // chars_per_page
+        char_on_page = i % chars_per_page
+        row = char_on_page // chars_per_row
+        col = char_on_page % chars_per_row
         
         # Check if we need a new page
-        if row >= rows_per_page:
+        if i > 0 and char_on_page == 0:
             c.showPage()
             c.setFont(font_name, font_size)
-            row = 0
             
         x = x_start + col * cell_width
-        y = y_start - (row % rows_per_page) * cell_height
+        y = y_start - row * cell_height
         
         # Draw cell border
         c.rect(x, y, cell_width, cell_height)
@@ -211,6 +239,38 @@ def generate():
         return render_template('index.html', error=str(e), 
                              new_chars=new_chars, start_char=start_char, 
                              shuffle_checked='checked' if shuffle else '')
+
+@app.route('/generate-custom', methods=['POST'])
+def generate_custom():
+    custom_text = request.form['custom_chars'].strip()
+    shuffle = 'shuffle' in request.form
+    
+    try:
+        # Filter and deduplicate Chinese characters
+        filtered_chars = filter_chinese_characters(custom_text)
+        
+        if not filtered_chars:
+            raise ValueError("No Chinese characters found in the pasted text")
+        
+        # Convert to list for shuffling if needed
+        char_list = list(filtered_chars)
+        
+        if shuffle:
+            random.shuffle(char_list)
+        
+        pdf_path = generate_pdf(char_list)
+        
+        # Generate filename with character count
+        char_count = len(char_list)
+        filename = f'chinese_custom_{char_count}chars.pdf'
+        
+        return send_file(pdf_path, as_attachment=True, download_name=filename)
+        
+    except ValueError as e:
+        # Return to form with error message
+        return render_template('index.html', error=str(e), 
+                             custom_chars=custom_text,
+                             custom_shuffle_checked='checked' if shuffle else '')
 
 if __name__ == '__main__':
     # Use debug=False for production deployment
