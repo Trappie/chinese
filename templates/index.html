@@ -63,6 +63,72 @@
             color: #666;
             margin-top: 5px;
         }
+        .view-chars-btn {
+            background-color: #2196F3;
+            color: white;
+            padding: 8px 16px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+            margin-top: 10px;
+        }
+        .view-chars-btn:hover {
+            background-color: #1976D2;
+        }
+        #characterModal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.5);
+        }
+        .modal-content {
+            background-color: white;
+            margin: 5% auto;
+            padding: 20px;
+            border-radius: 10px;
+            width: 80%;
+            max-width: 800px;
+            max-height: 80%;
+            overflow-y: auto;
+            position: relative;
+        }
+        .close {
+            color: #aaa;
+            float: right;
+            font-size: 28px;
+            font-weight: bold;
+            cursor: pointer;
+            position: absolute;
+            right: 15px;
+            top: 10px;
+        }
+        .close:hover {
+            color: #000;
+        }
+        #charactersDisplay {
+            font-size: 24px;
+            line-height: 1.8;
+            letter-spacing: 4px;
+            font-family: "SimSun", "Microsoft YaHei", "Helvetica", sans-serif;
+            padding: 20px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            background-color: #fafafa;
+            margin-top: 15px;
+            user-select: text;
+            word-break: break-all;
+            white-space: normal;
+        }
+        .modal-header {
+            margin-bottom: 10px;
+            border-bottom: 1px solid #eee;
+            padding-bottom: 10px;
+        }
     </style>
 </head>
 <body>
@@ -80,6 +146,7 @@
                 <label for="new_chars">New Characters to Learn:</label>
                 <input type="text" id="new_chars" name="new_chars" placeholder="Enter new Chinese characters" value="{{ new_chars or '' }}" required>
                 <div class="help-text">Enter the Chinese characters your child is newly learning</div>
+                <button type="button" class="view-chars-btn" onclick="showCharacters()">📖 View All Characters</button>
             </div>
             
             <div class="form-group">
@@ -109,5 +176,61 @@
             </ul>
         </div>
     </div>
+
+    <!-- Character Display Modal -->
+    <div id="characterModal">
+        <div class="modal-content">
+            <span class="close" onclick="closeModal()">&times;</span>
+            <div class="modal-header">
+                <h3>All Available Characters</h3>
+                <p>Click and drag to select characters you can copy and paste:</p>
+            </div>
+            <div id="charactersDisplay">Loading characters...</div>
+        </div>
+    </div>
+
+    <script>
+        function showCharacters() {
+            document.getElementById('characterModal').style.display = 'block';
+            
+            // Fetch characters from the server
+            fetch('/characters')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.characters) {
+                        displayCharacters(data.characters);
+                    } else {
+                        document.getElementById('charactersDisplay').textContent = 'Error loading characters: ' + (data.error || 'Unknown error');
+                    }
+                })
+                .catch(error => {
+                    document.getElementById('charactersDisplay').textContent = 'Error fetching characters: ' + error.message;
+                });
+        }
+
+        function displayCharacters(characters) {
+            const display = document.getElementById('charactersDisplay');
+            display.textContent = characters;
+        }
+
+        function closeModal() {
+            document.getElementById('characterModal').style.display = 'none';
+        }
+
+        // Close modal when clicking outside of it
+        window.onclick = function(event) {
+            const modal = document.getElementById('characterModal');
+            if (event.target === modal) {
+                closeModal();
+            }
+        }
+
+        // Close modal with Escape key
+        document.addEventListener('keydown', function(event) {
+            if (event.key === 'Escape') {
+                closeModal();
+            }
+        });
+    </script>
 </body>
 </html>

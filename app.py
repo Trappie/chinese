@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, send_file
+from flask import Flask, render_template, request, send_file, jsonify
 from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import letter
 from reportlab.pdfbase import pdfmetrics
@@ -180,6 +180,15 @@ def generate_pdf(characters):
 def index():
     return render_template('index.html')
 
+@app.route('/characters')
+def get_characters():
+    """Return all characters from data.txt as JSON"""
+    try:
+        all_chars = load_characters()
+        return jsonify({'characters': all_chars})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
 @app.route('/generate', methods=['POST'])
 def generate():
     new_chars = request.form['new_chars'].strip()
@@ -205,4 +214,4 @@ def generate():
 
 if __name__ == '__main__':
     # Use debug=False for production deployment
-    app.run(debug=False, host='0.0.0.0', port=5000)
+    app.run(debug=False, host='0.0.0.0', port=9527)
