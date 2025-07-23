@@ -175,7 +175,7 @@
         }
         .clickable-char {
             cursor: pointer;
-            transition: background-color 0.2s;
+            transition: background-color 0.2s, transform 0.2s;
         }
         .clickable-char:hover {
             background-color: #e1bee7 !important;
@@ -183,6 +183,15 @@
         }
         .clickable-char:active {
             background-color: #ce93d8 !important;
+        }
+        .char-added {
+            background-color: #c8e6c9 !important;
+            cursor: default;
+            opacity: 0.7;
+        }
+        .char-added:hover {
+            background-color: #c8e6c9 !important;
+            transform: none;
         }
     </style>
 </head>
@@ -395,6 +404,7 @@
 
         function displayLookupResults(results) {
             const resultsDiv = document.getElementById('lookup_results');
+            const currentChars = document.getElementById('new_chars').value;
             
             let html = '<h4 style="margin-top: 0; color: #7b1fa2;">Lookup Results (sorted by database order):</h4>';
             html += '<p style="color: #666; font-size: 14px; margin-bottom: 10px;">💡 Click on any character to add it to "New Characters to Learn"</p>';
@@ -403,16 +413,33 @@
             results.forEach((result, order) => {
                 const statusColor = result.index === '∞' ? '#d32f2f' : '#388e3c';
                 const statusText = result.index === '∞' ? 'Not in database' : `Index: ${result.index}`;
-                const clickable = result.index !== '∞' ? 'clickable-char' : '';
-                const clickHandler = result.index !== '∞' ? `onclick="addToNewChars('${result.char}')"` : '';
+                const isAlreadyAdded = currentChars.includes(result.char);
+                const isClickable = result.index !== '∞' && !isAlreadyAdded;
                 
-                html += `<div style="margin: 8px 0; padding: 8px; background-color: #f5f5f5; border-radius: 4px;" class="${clickable}" ${clickHandler}>`;
+                let cssClass = '';
+                let clickHandler = '';
+                let helpText = '';
+                
+                if (result.index === '∞') {
+                    // Character not in database - not clickable
+                    cssClass = '';
+                    helpText = '';
+                } else if (isAlreadyAdded) {
+                    // Character already added - show as added
+                    cssClass = 'char-added';
+                    helpText = '<span style="color: #4caf50; font-size: 12px; margin-left: 10px;">✓ Added</span>';
+                } else {
+                    // Character can be clicked
+                    cssClass = 'clickable-char';
+                    clickHandler = `onclick="addToNewChars('${result.char}')"`;
+                    helpText = '<span style="color: #7b1fa2; font-size: 12px; margin-left: 10px;">← Click to add</span>';
+                }
+                
+                html += `<div style="margin: 8px 0; padding: 8px; background-color: #f5f5f5; border-radius: 4px;" class="${cssClass}" ${clickHandler} data-char="${result.char}">`;
                 html += `<span style="font-size: 20px; font-weight: bold;">${result.char}</span> `;
                 html += `<span style="color: ${statusColor}; font-weight: bold;">${statusText}</span> `;
                 html += `<span style="color: #666;">(Sort order: ${order + 1})</span>`;
-                if (result.index !== '∞') {
-                    html += `<span style="color: #7b1fa2; font-size: 12px; margin-left: 10px;">← Click to add</span>`;
-                }
+                html += helpText;
                 html += `</div>`;
             });
             
@@ -426,28 +453,46 @@
             const newCharsInput = document.getElementById('new_chars');
             const currentValue = newCharsInput.value;
             
-            // Check if character is already in the input
+            // Check if character is already in the input (this should not happen with new logic)
             if (currentValue.includes(char)) {
-                // Highlight the character briefly to show it's already there
-                newCharsInput.style.backgroundColor = '#fff3e0';
-                setTimeout(() => {
-                    newCharsInput.style.backgroundColor = '';
-                }, 500);
                 return;
             }
             
             // Add the character to the input
             newCharsInput.value = currentValue + char;
             
-            // Briefly highlight the input to show the addition
-            newCharsInput.style.backgroundColor = '#e8f5e8';
-            setTimeout(() => {
-                newCharsInput.style.backgroundColor = '';
-            }, 500);
-            
-            // Focus the input
-            newCharsInput.focus();
+            // Update the lookup results to reflect the change
+            updateLookupResultsDisplay();
         }
+
+        function updateLookupResultsDisplay() {
+            // Get the current lookup results and re-render them
+            const lookupResults = document.getElementById('lookup_results');
+            if (lookupResults.style.display === 'block') {
+                // Re-trigger the lookup to update the display
+                const input = document.getElementById('lookup_chars').value.trim();
+                if (input) {
+                    fetch('/characters')
+                        .then(response => response.json())
+                        .then(data => {
+                            if (data.characters) {
+                                performLookup(input, data.characters);
+                            }
+                        })
+                        .catch(error => {
+                            console.error('Error updating lookup results:', error);
+                        });
+                }
+            }
+        }
+
+        // Monitor changes to the new_chars input to update lookup display
+        document.addEventListener('DOMContentLoaded', function() {
+            const newCharsInput = document.getElementById('new_chars');
+            if (newCharsInput) {
+                newCharsInput.addEventListener('input', updateLookupResultsDisplay);
+            }
+        });
 
         function closeModal() {
             document.getElementById('characterModal').style.display = 'none';
