@@ -75,6 +75,43 @@ def select_characters(new_chars, start_char, all_chars):
     
     return new_char_list + old_chars[:num_old]
 
+def generate_smart_filename(new_chars, start_char, all_chars):
+    """
+    Generate filename in format: new_chars(下一个next_char).pdf
+    """
+    try:
+        new_char_list = list(new_chars)
+        num_new = len(new_char_list)
+        num_old = 50 - num_new
+        
+        if num_old <= 0:
+            # Only new characters, no review - use simple filename
+            return f'{new_chars}.pdf'
+        
+        # Find the starting index
+        start_index = all_chars.index(start_char)
+        
+        # Calculate how many review characters we collected
+        # We go backward from start_index, collecting num_old characters
+        # The last character we collect is at index: start_index - (num_old - 1)
+        # So the next starting point is: start_index - num_old
+        
+        next_start_index = start_index - num_old
+        
+        # Handle wraparound case
+        if next_start_index < 0:
+            next_start_index = len(all_chars) + next_start_index
+        
+        next_start_char = all_chars[next_start_index]
+        
+        # Generate filename
+        filename = f'{new_chars}(下一个{next_start_char}).pdf'
+        return filename
+        
+    except Exception as e:
+        # Fallback to simple filename if anything goes wrong
+        return f'{new_chars}.pdf'
+
 def filter_chinese_characters(text):
     """
     Filter out only Chinese characters from text and remove duplicates
@@ -217,6 +254,51 @@ def get_characters():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+@app.route('/add-character', methods=['POST'])
+def add_character():
+    """Add a character to the end of data.txt"""
+    try:
+        char = request.json.get('character', '').strip()
+        
+        if not char:
+            return jsonify({'error': 'No character provided'}), 400
+        
+        if len(char) != 1:
+            return jsonify({'error': 'Only single characters are allowed'}), 400
+        
+        # Check if it's a valid Chinese character
+        import re
+        chinese_pattern = r'[\u4e00-\u9fff\u3400-\u4dbf\uf900-\ufaff]'
+        if not re.match(chinese_pattern, char):
+            return jsonify({'error': 'Only Chinese characters are allowed'}), 400
+        
+        # Load current characters
+        all_chars = load_characters()
+        
+        # Check if character already exists
+        if char in all_chars:
+            return jsonify({'error': f'Character "{char}" already exists in database'}), 400
+        
+        # Append character to data.txt
+        import os
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        data_path = os.path.join(current_dir, 'data.txt')
+        
+        with open(data_path, 'a', encoding='utf-8') as f:
+            f.write(char)
+        
+        # Get the new index
+        new_index = len(all_chars)
+        
+        return jsonify({
+            'success': True, 
+            'message': f'Character "{char}" added to database at index {new_index}',
+            'index': new_index
+        })
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
 @app.route('/generate', methods=['POST'])
 def generate():
     new_chars = request.form['new_chars'].strip()
@@ -232,7 +314,10 @@ def generate():
         
         pdf_path = generate_pdf(selected_chars)
         
-        return send_file(pdf_path, as_attachment=True, download_name='chinese_practice.pdf')
+        # Generate smart filename: new_chars(下一个next_char).pdf
+        filename = generate_smart_filename(new_chars, start_char, all_chars)
+        
+        return send_file(pdf_path, as_attachment=True, download_name=filename)
         
     except ValueError as e:
         # Return to form with error message

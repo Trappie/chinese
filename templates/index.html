@@ -193,6 +193,24 @@
             background-color: #c8e6c9 !important;
             transform: none;
         }
+        .add-to-db-btn {
+            background-color: #ff9800;
+            color: white;
+            border: none;
+            padding: 4px 8px;
+            border-radius: 3px;
+            font-size: 11px;
+            cursor: pointer;
+            margin-left: 10px;
+            transition: background-color 0.2s;
+        }
+        .add-to-db-btn:hover {
+            background-color: #f57c00;
+        }
+        .add-to-db-btn:disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
+        }
     </style>
 </head>
 <body>
@@ -421,9 +439,9 @@
                 let helpText = '';
                 
                 if (result.index === '∞') {
-                    // Character not in database - not clickable
+                    // Character not in database - show add button
                     cssClass = '';
-                    helpText = '';
+                    helpText = `<button class="add-to-db-btn" onclick="addToDatabase('${result.char}')" data-char="${result.char}">+ Add to Database</button>`;
                 } else if (isAlreadyAdded) {
                     // Character already added - show as added
                     cssClass = 'char-added';
@@ -484,6 +502,65 @@
                         });
                 }
             }
+        }
+
+        function addToDatabase(char) {
+            const button = document.querySelector(`button[data-char="${char}"]`);
+            if (button) {
+                button.disabled = true;
+                button.textContent = 'Adding...';
+            }
+
+            fetch('/add-character', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    character: char
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    // Show success message
+                    if (button) {
+                        button.textContent = `✓ Added (Index: ${data.index})`;
+                        button.style.backgroundColor = '#4caf50';
+                        button.disabled = true;
+                    }
+                    
+                    // Refresh the lookup results to show the updated status
+                    setTimeout(() => {
+                        updateLookupResultsDisplay();
+                    }, 1000);
+                } else {
+                    // Show error message
+                    if (button) {
+                        button.textContent = 'Error';
+                        button.style.backgroundColor = '#f44336';
+                        setTimeout(() => {
+                            button.disabled = false;
+                            button.textContent = '+ Add to Database';
+                            button.style.backgroundColor = '#ff9800';
+                        }, 2000);
+                    }
+                    alert('Error: ' + data.error);
+                }
+            })
+            .catch(error => {
+                console.error('Error adding character:', error);
+                if (button) {
+                    button.textContent = 'Error';
+                    button.style.backgroundColor = '#f44336';
+                    setTimeout(() => {
+                        button.disabled = false;
+                        button.textContent = '+ Add to Database';
+                        button.style.backgroundColor = '#ff9800';
+                    }, 2000);
+                }
+                alert('Error adding character to database');
+            });
         }
 
         // Monitor changes to the new_chars input to update lookup display
