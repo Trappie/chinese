@@ -173,6 +173,17 @@
             outline: none;
             border-color: #4CAF50;
         }
+        .clickable-char {
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+        .clickable-char:hover {
+            background-color: #e1bee7 !important;
+            transform: scale(1.05);
+        }
+        .clickable-char:active {
+            background-color: #ce93d8 !important;
+        }
     </style>
 </head>
 <body>
@@ -218,6 +229,18 @@
             <button type="submit" class="submit-btn">Generate Practice PDF</button>
         </form>
         
+        <!-- Character Lookup Tool -->
+        <div style="margin-top: 30px; padding: 15px; background-color: #f3e5f5; border-radius: 5px;">
+            <h3 style="margin-top: 0; color: #7b1fa2;">Character Lookup Tool</h3>
+            <div class="form-group">
+                <label for="lookup_chars">Characters to Look Up:</label>
+                <input type="text" id="lookup_chars" placeholder="Enter characters to check their order and index" style="width: 100%; padding: 10px; border: 2px solid #ddd; border-radius: 5px; font-size: 16px; box-sizing: border-box;">
+                <div class="help-text">Enter characters to see their order in the database and their index positions</div>
+                <button type="button" class="view-chars-btn" onclick="lookupCharacters()" style="background-color: #7b1fa2;">🔍 Look Up Characters</button>
+            </div>
+            <div id="lookup_results" style="margin-top: 15px; padding: 10px; background-color: white; border-radius: 5px; display: none;"></div>
+        </div>
+
         <div style="margin-top: 30px; padding: 15px; background-color: #e7f3ff; border-radius: 5px;">
             <h3 style="margin-top: 0; color: #1976d2;">How it works:</h3>
             <ul style="color: #555;">
@@ -313,6 +336,117 @@
         function displayCharacters(characters) {
             const display = document.getElementById('charactersDisplay');
             display.textContent = characters;
+        }
+
+        function lookupCharacters() {
+            const input = document.getElementById('lookup_chars').value.trim();
+            if (!input) {
+                alert('Please enter some characters to look up');
+                return;
+            }
+
+            // Fetch characters from the server and perform lookup
+            fetch('/characters')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.characters) {
+                        performLookup(input, data.characters);
+                    } else {
+                        document.getElementById('lookup_results').innerHTML = 'Error loading character database: ' + (data.error || 'Unknown error');
+                        document.getElementById('lookup_results').style.display = 'block';
+                    }
+                })
+                .catch(error => {
+                    document.getElementById('lookup_results').innerHTML = 'Error fetching characters: ' + error.message;
+                    document.getElementById('lookup_results').style.display = 'block';
+                });
+        }
+
+        function performLookup(inputChars, databaseChars) {
+            const chars = Array.from(inputChars);
+            const results = [];
+
+            // Create lookup map for O(1) index access
+            const charIndexMap = {};
+            for (let i = 0; i < databaseChars.length; i++) {
+                charIndexMap[databaseChars[i]] = i;
+            }
+
+            // Get index for each character
+            chars.forEach(char => {
+                const index = charIndexMap[char];
+                results.push({
+                    char: char,
+                    index: index !== undefined ? index : '∞'
+                });
+            });
+
+            // Sort by index (∞ goes to end)
+            results.sort((a, b) => {
+                if (a.index === '∞' && b.index === '∞') return 0;
+                if (a.index === '∞') return 1;
+                if (b.index === '∞') return -1;
+                return a.index - b.index;
+            });
+
+            // Display results
+            displayLookupResults(results);
+        }
+
+        function displayLookupResults(results) {
+            const resultsDiv = document.getElementById('lookup_results');
+            
+            let html = '<h4 style="margin-top: 0; color: #7b1fa2;">Lookup Results (sorted by database order):</h4>';
+            html += '<p style="color: #666; font-size: 14px; margin-bottom: 10px;">💡 Click on any character to add it to "New Characters to Learn"</p>';
+            html += '<div style="font-family: monospace; font-size: 16px;">';
+            
+            results.forEach((result, order) => {
+                const statusColor = result.index === '∞' ? '#d32f2f' : '#388e3c';
+                const statusText = result.index === '∞' ? 'Not in database' : `Index: ${result.index}`;
+                const clickable = result.index !== '∞' ? 'clickable-char' : '';
+                const clickHandler = result.index !== '∞' ? `onclick="addToNewChars('${result.char}')"` : '';
+                
+                html += `<div style="margin: 8px 0; padding: 8px; background-color: #f5f5f5; border-radius: 4px;" class="${clickable}" ${clickHandler}>`;
+                html += `<span style="font-size: 20px; font-weight: bold;">${result.char}</span> `;
+                html += `<span style="color: ${statusColor}; font-weight: bold;">${statusText}</span> `;
+                html += `<span style="color: #666;">(Sort order: ${order + 1})</span>`;
+                if (result.index !== '∞') {
+                    html += `<span style="color: #7b1fa2; font-size: 12px; margin-left: 10px;">← Click to add</span>`;
+                }
+                html += `</div>`;
+            });
+            
+            html += '</div>';
+            
+            resultsDiv.innerHTML = html;
+            resultsDiv.style.display = 'block';
+        }
+
+        function addToNewChars(char) {
+            const newCharsInput = document.getElementById('new_chars');
+            const currentValue = newCharsInput.value;
+            
+            // Check if character is already in the input
+            if (currentValue.includes(char)) {
+                // Highlight the character briefly to show it's already there
+                newCharsInput.style.backgroundColor = '#fff3e0';
+                setTimeout(() => {
+                    newCharsInput.style.backgroundColor = '';
+                }, 500);
+                return;
+            }
+            
+            // Add the character to the input
+            newCharsInput.value = currentValue + char;
+            
+            // Briefly highlight the input to show the addition
+            newCharsInput.style.backgroundColor = '#e8f5e8';
+            setTimeout(() => {
+                newCharsInput.style.backgroundColor = '';
+            }, 500);
+            
+            // Focus the input
+            newCharsInput.focus();
         }
 
         function closeModal() {
