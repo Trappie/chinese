@@ -227,6 +227,7 @@
         <div class="tabs">
             <button class="tab active" onclick="switchTab('smart-tab')">Smart Selection</button>
             <button class="tab" onclick="switchTab('custom-tab')">Custom Characters</button>
+            <button class="tab" onclick="switchTab('math-tab')">Math Problems</button>
         </div>
 
         <!-- Smart Selection Tab -->
@@ -309,6 +310,54 @@
                 <li>Multiple pages generated if you have more than 50 characters</li>
                 <li>Each page contains up to 50 characters in a 5x10 grid</li>
             </ul>
+        </div>
+        </div>
+
+        <!-- Math Problems Tab -->
+        <div id="math-tab" class="tab-content">
+        <form action="/generate-math" method="post">
+            <div class="form-group">
+                <label for="problem_type">Problem Type:</label>
+                <select id="problem_type" name="problem_type" style="width: 100%; padding: 10px; border: 2px solid #ddd; border-radius: 5px; font-size: 16px; box-sizing: border-box;">
+                    <option value="exponential">Exponential Rules</option>
+                </select>
+                <div class="help-text">Select the type of math problems to generate</div>
+            </div>
+            
+            <div class="form-group">
+                <label for="difficulty">Difficulty Level:</label>
+                <select id="difficulty" name="difficulty" style="width: 100%; padding: 10px; border: 2px solid #ddd; border-radius: 5px; font-size: 16px; box-sizing: border-box;">
+                    <option value="easy">Easy (exponents 1-5)</option>
+                    <option value="medium" selected>Medium (exponents 1-10, negative allowed)</option>
+                    <option value="hard">Hard (exponents 1-15, negative allowed)</option>
+                </select>
+                <div class="help-text">Choose the difficulty level for the problems</div>
+            </div>
+            
+            <div class="form-group">
+                <label for="num_problems">Number of Problems:</label>
+                <select id="num_problems" name="num_problems" style="width: 100%; padding: 10px; border: 2px solid #ddd; border-radius: 5px; font-size: 16px; box-sizing: border-box;">
+                    <option value="6" selected>6 problems (1 page)</option>
+                    <option value="12">12 problems (2 pages)</option>
+                    <option value="18">18 problems (3 pages)</option>
+                    <option value="24">24 problems (4 pages)</option>
+                </select>
+                <div class="help-text">Each page contains 6 problems in a 2×3 grid</div>
+            </div>
+            
+            <button type="submit" class="submit-btn">Generate Math Problems PDF</button>
+        </form>
+        
+        <div style="margin-top: 30px; padding: 15px; background-color: #e8f5e8; border-radius: 5px;">
+            <h3 style="margin-top: 0; color: #2e7d32;">Exponential Rules Covered:</h3>
+            <ul style="color: #555;">
+                <li><strong>Product Rule:</strong> a<sup>m</sup> × a<sup>n</sup> = a<sup>m+n</sup></li>
+                <li><strong>Quotient Rule:</strong> a<sup>m</sup> ÷ a<sup>n</sup> = a<sup>m-n</sup></li>
+                <li><strong>Power Rule:</strong> (a<sup>m</sup>)<sup>n</sup> = a<sup>m×n</sup></li>
+                <li><strong>Negative Exponents:</strong> a<sup>-n</sup> = 1/a<sup>n</sup></li>
+                <li>Problems include both positive and negative exponents</li>
+            </ul>
+        </div>
         </div>
         </div>
     </div>

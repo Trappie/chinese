@@ -4,6 +4,7 @@ from reportlab.lib.pagesizes import letter
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.pdfbase.cidfonts import UnicodeCIDFont
+from reportlab.lib.units import inch
 import tempfile
 import os
 import random
@@ -135,6 +136,165 @@ def filter_chinese_characters(text):
             seen.add(char)
     
     return ''.join(unique_chars)
+
+def generate_exponential_problem(difficulty):
+    """
+    Generate a single exponential math problem based on difficulty level
+    Returns a tuple: (problem_text, answer_text)
+    """
+    # Set ranges based on difficulty
+    if difficulty == 'easy':
+        base_range = (2, 9)
+        exp_range = (1, 5)
+        allow_negative = False
+    elif difficulty == 'medium':
+        base_range = (2, 12)
+        exp_range = (1, 10)
+        allow_negative = True
+    else:  # hard
+        base_range = (2, 15)
+        exp_range = (1, 15)
+        allow_negative = True
+    
+    # Choose problem type
+    problem_types = ['product', 'quotient', 'power']
+    if allow_negative:
+        problem_types.append('negative')
+    
+    problem_type = random.choice(problem_types)
+    base = random.randint(*base_range)
+    
+    if problem_type == 'product':
+        # a^m × a^n = a^(m+n)
+        exp1 = random.randint(*exp_range)
+        exp2 = random.randint(*exp_range)
+        if allow_negative and random.random() < 0.3:
+            exp1 = -exp1 if random.random() < 0.5 else exp1
+            exp2 = -exp2 if random.random() < 0.5 else exp2
+        
+        problem = f"{base}^{{{exp1}}} × {base}^{{{exp2}}}"
+        answer = f"{base}^{{{exp1 + exp2}}}"
+        
+    elif problem_type == 'quotient':
+        # a^m ÷ a^n = a^(m-n)
+        exp1 = random.randint(*exp_range)
+        exp2 = random.randint(*exp_range)
+        if allow_negative and random.random() < 0.3:
+            exp1 = -exp1 if random.random() < 0.5 else exp1
+            exp2 = -exp2 if random.random() < 0.5 else exp2
+        
+        problem = f"{base}^{{{exp1}}} ÷ {base}^{{{exp2}}}"
+        answer = f"{base}^{{{exp1 - exp2}}}"
+        
+    elif problem_type == 'power':
+        # (a^m)^n = a^(m×n)
+        exp1 = random.randint(*exp_range)
+        exp2 = random.randint(2, min(5, exp_range[1]))  # Keep multiplied result reasonable
+        if allow_negative and random.random() < 0.3:
+            exp1 = -exp1 if random.random() < 0.5 else exp1
+            exp2 = -exp2 if random.random() < 0.5 else exp2
+        
+        problem = f"({base}^{{{exp1}}})^{{{exp2}}}"
+        answer = f"{base}^{{{exp1 * exp2}}}"
+        
+    else:  # negative
+        # a^(-n) = 1/a^n or mixed operations with negatives
+        if random.random() < 0.5:
+            # Simple negative exponent
+            exp = random.randint(2, exp_range[1])
+            problem = f"{base}^{{-{exp}}}"
+            answer = f"1/{base}^{{{exp}}}"
+        else:
+            # Mixed operation with negative
+            exp1 = random.randint(*exp_range)
+            exp2 = -random.randint(1, exp_range[1])
+            operation = random.choice(['×', '÷'])
+            
+            if operation == '×':
+                problem = f"{base}^{{{exp1}}} × {base}^{{{exp2}}}"
+                answer = f"{base}^{{{exp1 + exp2}}}"
+            else:
+                problem = f"{base}^{{{exp1}}} ÷ {base}^{{{exp2}}}"
+                answer = f"{base}^{{{exp1 - exp2}}}"
+    
+    return problem, answer
+
+def format_exponent_text(text):
+    """
+    Convert text with curly braces to superscript format for PDF
+    Example: "2^{3}" becomes displayable superscript format
+    """
+    # This will be handled in the PDF generation
+    return text
+
+def generate_math_pdf(problems, num_problems):
+    """
+    Generate PDF with math problems in 2x3 grid (6 problems per page)
+    """
+    temp_file = tempfile.NamedTemporaryFile(delete=False, suffix='.pdf')
+    c = canvas.Canvas(temp_file.name, pagesize=letter)
+    
+    width, height = letter  # 612 x 792 points
+    margin = 50
+    
+    # Grid layout: 2 columns × 3 rows = 6 problems per page
+    cols_per_page = 2
+    rows_per_page = 3
+    problems_per_page = cols_per_page * rows_per_page
+    
+    # Calculate cell dimensions
+    cell_width = (width - 2 * margin) / cols_per_page
+    cell_height = (height - 2 * margin) / rows_per_page
+    
+    x_start = margin
+    y_start = height - margin - cell_height
+    
+    for i, (problem, answer) in enumerate(problems):
+        page_num = i // problems_per_page
+        problem_on_page = i % problems_per_page
+        row = problem_on_page // cols_per_page
+        col = problem_on_page % cols_per_page
+        
+        # Check if we need a new page
+        if i > 0 and problem_on_page == 0:
+            c.showPage()
+        
+        x = x_start + col * cell_width
+        y = y_start - row * cell_height
+        
+        # Draw cell border
+        c.rect(x, y, cell_width, cell_height)
+        
+        # Draw problem number
+        c.setFont("Helvetica-Bold", 12)
+        c.drawString(x + 10, y + cell_height - 20, f"Problem {i + 1}:")
+        
+        # Draw the math problem
+        c.setFont("Helvetica", 14)
+        
+        # Split problem into base and exponent parts for better formatting
+        problem_y = y + cell_height - 50
+        
+        # Simple approach: replace ^{} with ^ and handle basic superscripts
+        display_problem = problem.replace('^{', '^').replace('}', '')
+        
+        # Draw problem
+        c.drawString(x + 10, problem_y, display_problem + " = ?")
+        
+        # Add some space for student work
+        c.setFont("Helvetica", 10)
+        c.drawString(x + 10, y + 30, "Answer:")
+        
+        # Draw horizontal line for answer
+        c.line(x + 60, y + 30, x + cell_width - 10, y + 30)
+        
+        # Optional: Add small answer in corner (can be removed for blank worksheets)
+        c.setFont("Helvetica", 8)
+        display_answer = answer.replace('^{', '^').replace('}', '')
+        c.drawString(x + cell_width - 100, y + 10, f"({display_answer})")
+    
+    c.save()
+    return temp_file.name
 
 def generate_pdf(characters):
     temp_file = tempfile.NamedTemporaryFile(delete=False, suffix='.pdf')
@@ -356,6 +516,33 @@ def generate_custom():
         return render_template('index.html', error=str(e), 
                              custom_chars=custom_text,
                              custom_shuffle_checked='checked' if shuffle else '')
+
+@app.route('/generate-math', methods=['POST'])
+def generate_math():
+    problem_type = request.form.get('problem_type', 'exponential')
+    difficulty = request.form.get('difficulty', 'medium')
+    num_problems = int(request.form.get('num_problems', 6))
+    
+    try:
+        # Generate problems
+        problems = []
+        for _ in range(num_problems):
+            if problem_type == 'exponential':
+                problem, answer = generate_exponential_problem(difficulty)
+                problems.append((problem, answer))
+        
+        # Generate PDF
+        pdf_path = generate_math_pdf(problems, num_problems)
+        
+        # Generate filename
+        pages = (num_problems + 5) // 6  # Round up to nearest page
+        filename = f'math_exponential_{difficulty}_{num_problems}problems_{pages}pages.pdf'
+        
+        return send_file(pdf_path, as_attachment=True, download_name=filename)
+        
+    except Exception as e:
+        # Return to form with error message
+        return render_template('index.html', error=f"Math generation error: {str(e)}")
 
 if __name__ == '__main__':
     # Use debug=False for production deployment
