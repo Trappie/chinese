@@ -5,10 +5,25 @@ from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.pdfbase.cidfonts import UnicodeCIDFont
 from reportlab.lib.units import inch
+from reportlab.lib.utils import ImageReader
+from reportlab.lib import colors
 import tempfile
 import os
 import random
 import re
+try:
+    import matplotlib
+    matplotlib.use('Agg')  # Non-interactive backend
+    import matplotlib.pyplot as plt
+    from io import BytesIO
+    from PIL import Image, ImageOps
+    LATEX_AVAILABLE = True
+    # Configure matplotlib for LaTeX
+    plt.rcParams['text.usetex'] = False  # Use matplotlib's mathtext, not external LaTeX
+    plt.rcParams['mathtext.fontset'] = 'cm'  # Computer Modern fonts
+    plt.rcParams['font.family'] = 'serif'
+except ImportError:
+    LATEX_AVAILABLE = False
 
 app = Flask(__name__)
 
@@ -359,142 +374,207 @@ def generate_standard_problem(problem_type, base_range, exp_range, allow_negativ
     
     return problem, answer
 
+def convert_to_latex_math(expression):
+    """
+    Convert our math expression format to LaTeX math format for matplotlib
+    """
+    latex = expression
+    
+    # Convert exponents: base^{exp} -> base^{exp} (already LaTeX format)
+    latex = re.sub(r'(\w+)\^\{([^}]+)\}', r'\1^{\2}', latex)
+    
+    # Convert fractions: 1/base^{exp} -> \frac{1}{base^{exp}}
+    latex = re.sub(r'1/(\w+\^\{[^}]+\})', r'\\frac{1}{\1}', latex)
+    latex = re.sub(r'1/(\w+)', r'\\frac{1}{\1}', latex)
+    
+    # Convert parenthetical fractions: (1/base)^{exp} -> \left(\frac{1}{base}\right)^{exp}
+    latex = re.sub(r'\(1/(\w+)\)\^\{([^}]+)\}', r'\\left(\\frac{1}{\1}\\right)^{\2}', latex)
+    
+    # Replace operators with LaTeX symbols
+    latex = latex.replace('×', '\\times')
+    latex = latex.replace('÷', '\\div')
+    
+    return f'${latex}$'
+
+def render_math_latex(expression, font_size=9, dpi=120, add_question_mark=True):
+    """
+    Render small mathematical expression for top-left corner positioning
+    Returns PIL Image object
+    """
+    if not LATEX_AVAILABLE:
+        return None
+    
+    try:
+        # Convert to LaTeX format
+        latex_expr = convert_to_latex_math(expression)
+        clean_latex = latex_expr.strip('$')
+        
+        # Add equals sign and question mark only for questions, not answers
+        if add_question_mark:
+            full_expression = f"{clean_latex} = \\,?"
+        else:
+            full_expression = clean_latex
+        
+        # Smaller figure size for top-left corner positioning
+        fig, ax = plt.subplots(figsize=(1.8, 0.4), dpi=dpi)
+        ax.axis('off')
+        
+        # Set matplotlib parameters for consistent math rendering
+        plt.rcParams.update({
+            'font.size': font_size,
+            'mathtext.fontset': 'cm',
+            'font.family': 'serif'
+        })
+        
+        # Render the math expression
+        ax.text(0.5, 0.5, f'${full_expression}$', 
+                fontsize=font_size,
+                ha='center', va='center', 
+                transform=ax.transAxes)
+        
+        # Render to image with minimal padding
+        buffer = BytesIO()
+        fig.savefig(buffer, format='png', dpi=dpi, 
+                   bbox_inches='tight', pad_inches=0.05,
+                   facecolor='white', edgecolor='none')
+        buffer.seek(0)
+        
+        plt.close(fig)
+        
+        # Open with PIL
+        img = Image.open(buffer)
+        return img
+        
+    except Exception as e:
+        print(f"LaTeX rendering error: {e}")
+        return None
+
 def draw_math_expression(canvas, x, y, expression, font_size=14):
     """
-    Draw a mathematical expression with proper formatting for exponents and fractions
+    Draw mathematical expression using LaTeX rendering for math parts only
     Returns the width of the drawn expression
     """
-    import re
+    if not LATEX_AVAILABLE:
+        # Simple fallback for when LaTeX is not available
+        canvas.setFont("Helvetica", font_size)
+        simple_text = expression.replace('^{', '^').replace('}', '')
+        canvas.drawString(x, y, simple_text)
+        return canvas.stringWidth(simple_text, "Helvetica", font_size)
     
-    # Parse the expression for different components
-    parts = []
-    current_x = x
-    
-    # Split expression into tokens (base, exponent, operators, etc.)
-    # Handle patterns like: base^{exponent}, (base^{exponent}), fractions
-    
-    # First, handle parentheses groups
-    expression = expression.replace('(', '( ').replace(')', ' )')
-    tokens = expression.split()
-    
-    for token in tokens:
-        if token == '(':
+    try:
+        # Render the math expression as image
+        img = render_math_latex(expression, font_size)
+        if img is None:
+            # Fallback to simple text
             canvas.setFont("Helvetica", font_size)
-            canvas.drawString(current_x, y, '(')
-            current_x += canvas.stringWidth('(', "Helvetica", font_size)
-            
-        elif token == ')':
-            canvas.setFont("Helvetica", font_size)
-            canvas.drawString(current_x, y, ')')
-            current_x += canvas.stringWidth(')', "Helvetica", font_size)
-            
-        elif token in ['×', '÷', '=']:
-            # Draw operators with some spacing
-            canvas.setFont("Helvetica", font_size)
-            current_x += 5  # Add space before operator
-            canvas.drawString(current_x, y, token)
-            current_x += canvas.stringWidth(token, "Helvetica", font_size) + 5
-            
-        elif '^{' in token:
-            # Handle base^{exponent}
-            base, exp_part = token.split('^{', 1)
-            exponent = exp_part.rstrip('}')
-            
-            # Draw base
-            canvas.setFont("Helvetica", font_size)
-            canvas.drawString(current_x, y, base)
-            current_x += canvas.stringWidth(base, "Helvetica", font_size)
-            
-            # Draw exponent (smaller and higher)
-            exp_font_size = int(font_size * 0.7)
-            exp_y = y + font_size * 0.3
-            canvas.setFont("Helvetica", exp_font_size)
-            canvas.drawString(current_x, exp_y, exponent)
-            current_x += canvas.stringWidth(exponent, "Helvetica", exp_font_size)
-            
-        elif token.startswith('(1/') and ')^{' in token:
-            # Handle fraction notation like (1/base)^{exponent}
-            # Extract base and exponent
-            inner = token[3:]  # Remove "(1/"
-            base_part, exp_part = inner.split(')^{', 1)
-            exponent = exp_part.rstrip('}')
-            
-            # Draw opening parenthesis
-            canvas.setFont("Helvetica", font_size)
-            canvas.drawString(current_x, y, '(')
-            current_x += canvas.stringWidth('(', "Helvetica", font_size)
-            
-            # Draw "1" numerator
-            canvas.drawString(current_x, y + font_size * 0.3, '1')
-            num_width = canvas.stringWidth('1', "Helvetica", font_size)
-            
-            # Draw base of denominator
-            canvas.drawString(current_x, y - font_size * 0.2, base_part)
-            base_width = canvas.stringWidth(base_part, "Helvetica", font_size)
-            
-            total_width = max(num_width, base_width)
-            
-            # Draw fraction line
-            canvas.line(current_x, y, current_x + total_width, y)
-            current_x += total_width
-            
-            # Draw closing parenthesis
-            canvas.drawString(current_x, y, ')')
-            current_x += canvas.stringWidth(')', "Helvetica", font_size)
-            
-            # Draw exponent (smaller and higher)
-            exp_font_size = int(font_size * 0.7)
-            exp_y = y + font_size * 0.3
-            canvas.setFont("Helvetica", exp_font_size)
-            canvas.drawString(current_x, exp_y, exponent)
-            current_x += canvas.stringWidth(exponent, "Helvetica", exp_font_size)
-            
-        elif token.startswith('1/') and '^{' in token:
-            # Handle fractions like 1/base^{exponent}
-            # Draw "1" numerator
-            canvas.setFont("Helvetica", font_size)
-            canvas.drawString(current_x, y + font_size * 0.3, '1')
-            num_width = canvas.stringWidth('1', "Helvetica", font_size)
-            
-            # Extract denominator
-            denominator = token[2:]  # Remove "1/"
-            if '^{' in denominator:
-                base, exp_part = denominator.split('^{', 1)
-                exponent = exp_part.rstrip('}')
-                
-                # Draw base of denominator
-                canvas.setFont("Helvetica", font_size)
-                canvas.drawString(current_x, y - font_size * 0.2, base)
-                base_width = canvas.stringWidth(base, "Helvetica", font_size)
-                
-                # Draw exponent of denominator
-                exp_font_size = int(font_size * 0.7)
-                exp_y = y - font_size * 0.2 + font_size * 0.3
-                canvas.setFont("Helvetica", exp_font_size)
-                canvas.drawString(current_x + base_width, exp_y, exponent)
-                exp_width = canvas.stringWidth(exponent, "Helvetica", exp_font_size)
-                
-                total_width = max(num_width, base_width + exp_width)
-                
-                # Draw fraction line
-                canvas.line(current_x, y, current_x + total_width, y)
-                current_x += total_width + 5
-            else:
-                # Simple fraction without exponent
-                canvas.drawString(current_x, y - font_size * 0.2, denominator)
-                denom_width = canvas.stringWidth(denominator, "Helvetica", font_size)
-                total_width = max(num_width, denom_width)
-                
-                # Draw fraction line
-                canvas.line(current_x, y, current_x + total_width, y)
-                current_x += total_width + 5
+            simple_text = expression.replace('^{', '^').replace('}', '')
+            canvas.drawString(x, y, simple_text)
+            return canvas.stringWidth(simple_text, "Helvetica", font_size)
+        
+        # Save PIL image to BytesIO for ReportLab
+        img_buffer = BytesIO()
+        img.save(img_buffer, format='PNG')
+        img_buffer.seek(0)
+        
+        # Create ImageReader for ReportLab
+        img_reader = ImageReader(img_buffer)
+        img_width, img_height = img.size
+        
+        # Scale to appropriate size for the font, but ensure it fits
+        scale = font_size / 16  # Base scale
+        max_width = 200  # Maximum width to prevent overflow
+        
+        # Calculate initial scaled dimensions
+        initial_width = img_width * scale * 0.6  # More conservative scaling
+        initial_height = img_height * scale * 0.6
+        
+        # If too wide, scale down further
+        if initial_width > max_width:
+            width_scale = max_width / initial_width
+            scaled_width = initial_width * width_scale
+            scaled_height = initial_height * width_scale
         else:
-            # Regular text
-            canvas.setFont("Helvetica", font_size)
-            canvas.drawString(current_x, y, token)
-            current_x += canvas.stringWidth(token, "Helvetica", font_size)
+            scaled_width = initial_width
+            scaled_height = initial_height
+        
+        # Draw image centered on baseline
+        canvas.drawImage(img_reader, x, y - scaled_height/3, 
+                        scaled_width, scaled_height)
+        
+        return scaled_width
+        
+    except Exception as e:
+        print(f"Math expression rendering error: {e}")
+        # Fallback to simple text
+        canvas.setFont("Helvetica", font_size)
+        simple_text = expression.replace('^{', '^').replace('}', '')
+        canvas.drawString(x, y, simple_text)
+        return canvas.stringWidth(simple_text, "Helvetica", font_size)
+
+def draw_math_expression_constrained(canvas, x, y, expression, font_size=14, max_width=200):
+    """
+    Draw mathematical expression with width constraint for layout
+    Returns the width of the drawn expression
+    """
+    if not LATEX_AVAILABLE:
+        # Simple fallback for when LaTeX is not available
+        canvas.setFont("Helvetica", font_size)
+        simple_text = expression.replace('^{', '^').replace('}', '')
+        text_width = canvas.stringWidth(simple_text, "Helvetica", font_size)
+        
+        # If text is too wide, use smaller font
+        if text_width > max_width:
+            scale_factor = max_width / text_width
+            new_font_size = int(font_size * scale_factor)
+            canvas.setFont("Helvetica", new_font_size)
+            canvas.drawString(x, y, simple_text)
+            return max_width
+        else:
+            canvas.drawString(x, y, simple_text)
+            return text_width
     
-    return current_x - x
+    try:
+        # Render the math expression as image with size constraint
+        img = render_math_latex(expression, font_size)
+        if img is None:
+            # Fallback to simple text
+            return draw_math_expression_constrained(canvas, x, y, expression, font_size, max_width)
+        
+        # Save PIL image to BytesIO for ReportLab
+        img_buffer = BytesIO()
+        img.save(img_buffer, format='PNG')
+        img_buffer.seek(0)
+        
+        # Create ImageReader for ReportLab
+        img_reader = ImageReader(img_buffer)
+        img_width, img_height = img.size
+        
+        # Scale to appropriate size for the font, with max_width constraint
+        scale = font_size / 16  # Base scale
+        
+        # Calculate initial scaled dimensions
+        initial_width = img_width * scale * 0.6
+        initial_height = img_height * scale * 0.6
+        
+        # Ensure it fits within max_width constraint
+        if initial_width > max_width:
+            width_scale = max_width / initial_width
+            scaled_width = max_width
+            scaled_height = initial_height * width_scale
+        else:
+            scaled_width = initial_width
+            scaled_height = initial_height
+        
+        # Draw image centered on baseline
+        canvas.drawImage(img_reader, x, y - scaled_height/3, 
+                        scaled_width, scaled_height)
+        
+        return scaled_width
+        
+    except Exception as e:
+        print(f"Math expression rendering error: {e}")
+        # Fallback to simple text with constraint
+        return draw_math_expression_constrained(canvas, x, y, expression, font_size, max_width)
 
 def format_math_problem_for_display(problem_text):
     """
@@ -508,85 +588,92 @@ def format_math_problem_for_display(problem_text):
 
 def draw_question_page(canvas, problems_subset, page_number):
     """
-    Draw a single question page with 6 problems in 2x3 grid
+    Draw clean 2x3 grid with only math questions - no titles, borders, or numbers
     """
     width, height = letter
     margin = 50
     
-    # Grid layout: 2 columns × 3 rows = 6 problems per page
+    # Simple 2x3 grid layout
     cols_per_page = 2
     rows_per_page = 3
     
-    # Calculate cell dimensions
+    # Use full page for math expressions
     cell_width = (width - 2 * margin) / cols_per_page
     cell_height = (height - 2 * margin) / rows_per_page
     
     x_start = margin
-    y_start = height - margin - cell_height
+    y_start = height - margin
     
-    # Add page header
-    canvas.setFont("Helvetica-Bold", 14)
-    canvas.drawString(margin, height - 30, f"Math Practice - Exponential Rules (Page {page_number})")
-    canvas.setFont("Helvetica", 10)
-    canvas.drawString(margin, height - 45, "Name: ________________    Date: ________________")
-    
-    for i, (problem, answer) in enumerate(problems_subset):
+    for i, (problem, _) in enumerate(problems_subset):
         if i >= 6:  # Only 6 problems per page
             break
             
         row = i // cols_per_page
         col = i % cols_per_page
         
+        # Calculate position for clean grid
         x = x_start + col * cell_width
-        y = y_start - row * cell_height
+        y = y_start - (row + 1) * cell_height
         
-        # Draw cell border
-        canvas.rect(x, y, cell_width, cell_height)
-        
-        # Draw problem number
-        canvas.setFont("Helvetica-Bold", 12)
+        # Calculate problem number
         problem_num = (page_number - 1) * 6 + i + 1
-        canvas.drawString(x + 10, y + cell_height - 20, f"Problem {problem_num}:")
         
-        # Draw the math problem with proper formatting
-        problem_y = y + cell_height - 60
+        # Add small problem number above the math expression
+        canvas.setFont("Helvetica-Bold", 10)
+        canvas.drawString(x + 15, y + cell_height - 12, f"{problem_num}.")
         
-        # Format and draw the problem
-        formatted_problem = format_math_problem_for_display(problem)
-        problem_width = draw_math_expression(canvas, x + 10, problem_y, formatted_problem, 16)
-        
-        # Draw equals sign and question mark
-        canvas.setFont("Helvetica", 16)
-        canvas.drawString(x + 15 + problem_width, problem_y, " = ?")
-        
-        # Add clean answer area (just a box, no "Answer:" label)
-        answer_box_x = x + 20
-        answer_box_y = y + 20
-        answer_box_width = cell_width - 40
-        answer_box_height = 25
-        canvas.rect(answer_box_x, answer_box_y, answer_box_width, answer_box_height)
+        # Generate small LaTeX image positioned in top-left corner below number
+        try:
+            formatted_problem = format_math_problem_for_display(problem)
+            math_img = render_math_latex(formatted_problem)
+            
+            if math_img:
+                img_width, img_height = math_img.size
+                
+                # Position below problem number with small margin
+                margin_from_edge = 15
+                img_x = x + margin_from_edge
+                img_y = y + cell_height - img_height - 25  # Extra space for problem number
+                
+                # Draw the small LaTeX image in top-left corner
+                img_buffer = BytesIO()
+                math_img.save(img_buffer, format='PNG')
+                img_buffer.seek(0)
+                
+                img_reader = ImageReader(img_buffer)
+                canvas.drawImage(img_reader, img_x, img_y, img_width, img_height)
+                
+            else:
+                # Smaller fallback text in top-left corner
+                canvas.setFont("Helvetica", 8)
+                text_x = x + 15
+                text_y = y + cell_height - 35
+                canvas.drawString(text_x, text_y, f"{formatted_problem} = ?")
+                
+        except:
+            # Smaller fallback text in top-left corner
+            canvas.setFont("Helvetica", 8)
+            text_x = x + 15
+            text_y = y + cell_height - 35
+            canvas.drawString(text_x, text_y, f"{problem} = ?")
 
 def draw_answer_page(canvas, problems_subset, page_number):
     """
-    Draw a single answer page with 6 answers in 2x3 grid
+    Draw clean 2x3 grid with problem numbers and answers - no titles or borders
     """
     width, height = letter
     margin = 50
     
-    # Grid layout: 2 columns × 3 rows = 6 problems per page
+    # Simple 2x3 grid layout - same as question page
     cols_per_page = 2
     rows_per_page = 3
     
-    # Calculate cell dimensions
+    # Use full page for answers
     cell_width = (width - 2 * margin) / cols_per_page
     cell_height = (height - 2 * margin) / rows_per_page
     
     x_start = margin
-    y_start = height - margin - cell_height
-    
-    # Add page header
-    canvas.setFont("Helvetica-Bold", 14)
-    canvas.drawString(margin, height - 30, f"Answer Key - Exponential Rules (Page {page_number})")
+    y_start = height - margin
     
     for i, (problem, answer) in enumerate(problems_subset):
         if i >= 6:  # Only 6 problems per page
@@ -595,32 +682,51 @@ def draw_answer_page(canvas, problems_subset, page_number):
         row = i // cols_per_page
         col = i % cols_per_page
         
+        # Calculate position for clean grid - same as question page
         x = x_start + col * cell_width
-        y = y_start - row * cell_height
+        y = y_start - (row + 1) * cell_height
         
-        # Draw cell border
-        canvas.rect(x, y, cell_width, cell_height)
-        
-        # Draw problem number
-        canvas.setFont("Helvetica-Bold", 12)
+        # Calculate problem number
         problem_num = (page_number - 1) * 6 + i + 1
-        canvas.drawString(x + 10, y + cell_height - 20, f"Problem {problem_num}:")
         
-        # Draw the complete equation with answer
-        equation_y = y + cell_height - 60
+        # Add problem number in top-left corner
+        canvas.setFont("Helvetica-Bold", 10)
+        canvas.drawString(x + 15, y + cell_height - 12, f"{problem_num}.")
         
-        # Format and draw the problem
-        formatted_problem = format_math_problem_for_display(problem)
-        problem_width = draw_math_expression(canvas, x + 10, equation_y, formatted_problem, 14)
-        
-        # Draw equals sign
-        canvas.setFont("Helvetica", 14)
-        canvas.drawString(x + 15 + problem_width, equation_y, " = ")
-        equals_width = canvas.stringWidth(" = ", "Helvetica", 14)
-        
-        # Draw the answer
-        formatted_answer = format_math_problem_for_display(answer)
-        draw_math_expression(canvas, x + 20 + problem_width + equals_width, equation_y, formatted_answer, 14)
+        # Generate small LaTeX image for the answer positioned below number
+        try:
+            formatted_answer = format_math_problem_for_display(answer)
+            answer_img = render_math_latex(formatted_answer, add_question_mark=False)
+            
+            if answer_img:
+                img_width, img_height = answer_img.size
+                
+                # Position below problem number
+                margin_from_edge = 15
+                img_x = x + margin_from_edge
+                img_y = y + cell_height - img_height - 25  # Extra space for problem number
+                
+                # Draw the small answer image
+                img_buffer = BytesIO()
+                answer_img.save(img_buffer, format='PNG')
+                img_buffer.seek(0)
+                
+                img_reader = ImageReader(img_buffer)
+                canvas.drawImage(img_reader, img_x, img_y, img_width, img_height)
+                
+            else:
+                # Smaller fallback text for answer
+                canvas.setFont("Helvetica", 8)
+                text_x = x + 15
+                text_y = y + cell_height - 35
+                canvas.drawString(text_x, text_y, formatted_answer)
+                
+        except:
+            # Smaller fallback
+            canvas.setFont("Helvetica", 8)
+            text_x = x + 15
+            text_y = y + cell_height - 35
+            canvas.drawString(text_x, text_y, answer)
 
 def generate_math_pdf(problems, num_problems):
     """
