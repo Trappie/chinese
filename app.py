@@ -396,7 +396,7 @@ def convert_to_latex_math(expression):
     
     return f'${latex}$'
 
-def render_math_latex(expression, font_size=9, dpi=120, add_question_mark=True):
+def render_math_latex(expression, font_size=9, dpi=300, add_question_mark=True):
     """
     Render small mathematical expression for top-left corner positioning
     Returns PIL Image object
@@ -415,8 +415,9 @@ def render_math_latex(expression, font_size=9, dpi=120, add_question_mark=True):
         else:
             full_expression = clean_latex
         
-        # Smaller figure size for top-left corner positioning
-        fig, ax = plt.subplots(figsize=(1.8, 0.4), dpi=dpi)
+        # Make expressions half the current size while keeping 300 DPI sharpness
+        # Current size is 0.72x0.16, so half would be 0.36x0.08
+        fig, ax = plt.subplots(figsize=(0.36, 0.08), dpi=dpi)
         ax.axis('off')
         
         # Set matplotlib parameters for consistent math rendering
@@ -630,18 +631,22 @@ def draw_question_page(canvas, problems_subset, page_number):
             if math_img:
                 img_width, img_height = math_img.size
                 
+                # Convert pixels to points for positioning
+                points_width = img_width * 72 / 300
+                points_height = img_height * 72 / 300
+                
                 # Position below problem number with small margin
                 margin_from_edge = 15
                 img_x = x + margin_from_edge
-                img_y = y + cell_height - img_height - 25  # Extra space for problem number
+                img_y = y + cell_height - points_height - 25  # Extra space for problem number
                 
-                # Draw the small LaTeX image in top-left corner
+                # Draw the small LaTeX image in top-left corner at proper scale 
                 img_buffer = BytesIO()
                 math_img.save(img_buffer, format='PNG')
                 img_buffer.seek(0)
                 
                 img_reader = ImageReader(img_buffer)
-                canvas.drawImage(img_reader, img_x, img_y, img_width, img_height)
+                canvas.drawImage(img_reader, img_x, img_y, points_width, points_height)
                 
             else:
                 # Smaller fallback text in top-left corner
@@ -701,18 +706,22 @@ def draw_answer_page(canvas, problems_subset, page_number):
             if answer_img:
                 img_width, img_height = answer_img.size
                 
+                # Convert pixels to points for positioning
+                points_width = img_width * 72 / 300
+                points_height = img_height * 72 / 300
+                
                 # Position below problem number
                 margin_from_edge = 15
                 img_x = x + margin_from_edge
-                img_y = y + cell_height - img_height - 25  # Extra space for problem number
+                img_y = y + cell_height - points_height - 25  # Extra space for problem number
                 
-                # Draw the small answer image
+                # Draw the small answer image at proper scale
                 img_buffer = BytesIO()
                 answer_img.save(img_buffer, format='PNG')
                 img_buffer.seek(0)
                 
                 img_reader = ImageReader(img_buffer)
-                canvas.drawImage(img_reader, img_x, img_y, img_width, img_height)
+                canvas.drawImage(img_reader, img_x, img_y, points_width, points_height)
                 
             else:
                 # Smaller fallback text for answer
