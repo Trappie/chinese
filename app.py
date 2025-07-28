@@ -32,8 +32,29 @@ def load_characters():
     import os
     current_dir = os.path.dirname(os.path.abspath(__file__))
     data_path = os.path.join(current_dir, 'data.txt')
-    with open(data_path, 'r', encoding='utf-8') as f:
-        return f.read().strip()
+    
+    # Try multiple possible locations for PythonAnywhere deployment  
+    possible_paths = [
+        data_path,  # Same directory as app.py
+        os.path.join(os.getcwd(), 'data.txt'),  # Current working directory
+        '/home/{}/mysite/data.txt'.format(os.environ.get('USER', 'username')),  # Common PythonAnywhere path
+        'data.txt'  # Relative path fallback
+    ]
+    
+    for path in possible_paths:
+        if os.path.exists(path):
+            with open(path, 'r', encoding='utf-8') as f:
+                return f.read().strip()
+    
+    # If none found, provide detailed error message
+    error_msg = f"data.txt not found in any of these locations:\n"
+    for i, path in enumerate(possible_paths, 1):
+        error_msg += f"{i}. {path} (exists: {os.path.exists(path)})\n"
+    error_msg += f"Current working directory: {os.getcwd()}\n"
+    error_msg += f"App file location: {current_dir}\n"
+    error_msg += f"Files in app directory: {os.listdir(current_dir) if os.path.exists(current_dir) else 'N/A'}"
+    
+    raise FileNotFoundError(error_msg)
 
 def select_characters(new_chars, start_char, all_chars):
     """
@@ -878,7 +899,20 @@ def generate_pdf(characters):
 
 @app.route('/')
 def index():
-    return render_template('index.html')
+    try:
+        return render_template('index.html')
+    except Exception as e:
+        # Fallback for PythonAnywhere deployment issues
+        return f"""
+        <html>
+        <head><title>Chinese Character Practice Generator</title></head>
+        <body>
+        <h1>Chinese Character Practice Generator</h1>
+        <p>Template loading error: {str(e)}</p>
+        <p>Please check if templates/index.html exists and is accessible.</p>
+        </body>
+        </html>
+        """, 500
 
 @app.route('/characters')
 def get_characters():
