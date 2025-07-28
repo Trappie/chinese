@@ -191,7 +191,7 @@ def generate_multi_part_problem(base_range, exp_range):
     Generate complex multi-part problems like: a^m × (a^n)^p ÷ a^q
     """
     base = random.randint(*base_range)
-    num_parts = random.choice([3, 4])  # 3 or 4 parts
+    num_parts = 3  # Limit to 3 parts to prevent clipping
     
     # Generate different operation combinations
     patterns = [
@@ -204,7 +204,7 @@ def generate_multi_part_problem(base_range, exp_range):
         ['power', 'product', 'quotient', 'power'],    # (a^m)^n × a^p ÷ (a^q)^r
     ]
     
-    pattern = random.choice(patterns[:3] if num_parts == 3 else patterns[3:])
+    pattern = random.choice(patterns[:3])  # Only use 3-part patterns
     
     # Generate exponents
     exponents = [random.randint(*exp_range) for _ in range(num_parts)]
@@ -396,7 +396,7 @@ def convert_to_latex_math(expression):
     
     return f'${latex}$'
 
-def render_math_latex(expression, font_size=9, dpi=300, add_question_mark=True):
+def render_math_latex(expression, font_size=18, dpi=300, add_question_mark=True):
     """
     Render small mathematical expression for top-left corner positioning
     Returns PIL Image object
@@ -415,9 +415,8 @@ def render_math_latex(expression, font_size=9, dpi=300, add_question_mark=True):
         else:
             full_expression = clean_latex
         
-        # Make expressions half the current size while keeping 300 DPI sharpness
-        # Current size is 0.72x0.16, so half would be 0.36x0.08
-        fig, ax = plt.subplots(figsize=(0.36, 0.08), dpi=dpi)
+        # Even wider figure size to accommodate variable expression lengths
+        fig, ax = plt.subplots(figsize=(2.5, 0.4), dpi=dpi)
         ax.axis('off')
         
         # Set matplotlib parameters for consistent math rendering
@@ -427,16 +426,16 @@ def render_math_latex(expression, font_size=9, dpi=300, add_question_mark=True):
             'font.family': 'serif'
         })
         
-        # Render the math expression
-        ax.text(0.5, 0.5, f'${full_expression}$', 
+        # Render the math expression left-aligned with padding from left edge
+        ax.text(0.05, 0.5, f'${full_expression}$', 
                 fontsize=font_size,
-                ha='center', va='center', 
+                ha='left', va='center', 
                 transform=ax.transAxes)
         
-        # Render to image with minimal padding
+        # Render to image without tight cropping to preserve figure size
         buffer = BytesIO()
         fig.savefig(buffer, format='png', dpi=dpi, 
-                   bbox_inches='tight', pad_inches=0.05,
+                   bbox_inches=None, pad_inches=0,
                    facecolor='white', edgecolor='none')
         buffer.seek(0)
         
@@ -634,6 +633,7 @@ def draw_question_page(canvas, problems_subset, page_number):
                 # Convert pixels to points for positioning
                 points_width = img_width * 72 / 300
                 points_height = img_height * 72 / 300
+                
                 
                 # Position below problem number with small margin
                 margin_from_edge = 15
