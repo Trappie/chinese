@@ -217,6 +217,11 @@
     <div class="container">
         <h1>Chinese Character Practice Generator</h1>
         
+        <!-- Current IP Display -->
+        <div id="ip-display" style="background-color: #e3f2fd; border: 1px solid #2196f3; color: #1565c0; padding: 10px; border-radius: 5px; margin-bottom: 20px; text-align: center; font-size: 14px;">
+            <strong>Your IP Address:</strong> <span id="current-ip">Loading...</span>
+        </div>
+        
         {% if error %}
         <div style="background-color: #ffebee; border: 1px solid #f44336; color: #c62828; padding: 15px; border-radius: 5px; margin-bottom: 20px;">
             <strong>Error:</strong> {{ error }}
@@ -612,12 +617,32 @@
             });
         }
 
+        // Fetch and display current IP address
+        function fetchCurrentIP() {
+            fetch('/client-ip')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.ip) {
+                        document.getElementById('current-ip').textContent = data.ip;
+                    } else {
+                        document.getElementById('current-ip').textContent = 'Unable to fetch IP';
+                    }
+                })
+                .catch(error => {
+                    console.error('Error fetching IP:', error);
+                    document.getElementById('current-ip').textContent = 'Error loading IP';
+                });
+        }
+
         // Monitor changes to the new_chars input to update lookup display
         document.addEventListener('DOMContentLoaded', function() {
             const newCharsInput = document.getElementById('new_chars');
             if (newCharsInput) {
                 newCharsInput.addEventListener('input', updateLookupResultsDisplay);
             }
+            
+            // Fetch IP address when page loads
+            fetchCurrentIP();
         });
 
         function closeModal() {

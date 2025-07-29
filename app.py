@@ -923,6 +923,21 @@ def get_characters():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+@app.route('/client-ip')
+def get_client_ip():
+    """Return the client's IP address"""
+    # Check for forwarded headers first (for reverse proxies)
+    if 'X-Forwarded-For' in request.headers:
+        # X-Forwarded-For can contain multiple IPs, first one is the original client
+        ip = request.headers['X-Forwarded-For'].split(',')[0].strip()
+    elif 'X-Real-IP' in request.headers:
+        ip = request.headers['X-Real-IP']
+    else:
+        # Direct connection
+        ip = request.remote_addr
+    
+    return jsonify({'ip': ip})
+
 @app.route('/add-character', methods=['POST'])
 def add_character():
     """Add a character to the end of data.txt"""
