@@ -1068,6 +1068,11 @@ def generate_math():
         # Return to form with error message
         return render_template('index.html', error=f"Math generation error: {str(e)}")
 
+@app.route('/sswpa-test/')
+def sswpa_test():
+    """Serve the SSWPA test website"""
+    return send_file(os.path.join(app.static_folder, 'sswpa-test', 'index.html'))
+
 if __name__ == '__main__':
     # Use debug=False for production deployment
     app.run(debug=False, host='0.0.0.0', port=9527)
